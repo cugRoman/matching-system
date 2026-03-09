@@ -1,0 +1,44 @@
+:root {
+  --surface: rgba(255, 255, 255, 0.88);
+  --stroke: rgba(15, 23, 42, 0.1);
+  --text: #0f172a;
+  --muted: #475569;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: 'IBM Plex Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background:
+    radial-gradient(1200px 500px at 5% -10%, rgba(14, 165, 233, 0.18), transparent 50%),
+    radial-gradient(800px 400px at 95% -10%, rgba(16, 185, 129, 0.2), transparent 50%),
+    linear-gradient(180deg, #f8fbff 0%, #f4faf2 100%);
+}
+
+.el-card {
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Space Grotesk', 'IBM Plex Sans', 'Noto Sans SC', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.hint {
+  color: var(--muted);
+}
