@@ -1,19 +1,12 @@
-<template>
+﻿<template>
   <div class="matching-demo">
-    <div class="toolbar">
-      <button @click="triggerFileInput" class="btn btn-primary">导入请求</button>
-      <input 
-        type="file" 
-        ref="fileInput" 
-        @change="handleFileImport" 
-        accept=".txt,.json" 
-        style="display: none"
-      />
-      <button @click="submitManualOrder" class="btn btn-primary">手动添加订单</button>
-      <button @click="executeMatch" class="btn btn-success">开始撮合</button>
-      <button @click="clearData" class="btn btn-danger">清空数据</button>
-      <span class="tip">提示: 点击导入请求选择txt文件，或使用内置示例</span>
-    </div>
+    <input
+      type="file"
+      ref="fileInput"
+      @change="handleFileImport"
+      accept=".txt,.json"
+      style="display: none"
+    />
 
     <div class="manual-form">
       <h3>手动输入订单</h3>
@@ -316,47 +309,47 @@ const handleFileImport = async (event: Event) => {
   try {
     const text = await file.text()
     let orders: OrderRequest[]
-    
+
     if (file.name.endsWith('.json')) {
       orders = JSON.parse(text)
     } else {
       orders = parseTxtFile(text)
     }
-    
+
     await orderApi.addOrders(orders)
     alert(`成功导入 ${orders.length} 条请求`)
   } catch (e) {
     console.error('Failed to import file:', e)
     alert('导入失败，请检查文件格式')
   }
-  
+
   target.value = ''
 }
 
 const parseTxtFile = (content: string): OrderRequest[] => {
   const lines = content.trim().split('\n')
   const orders: OrderRequest[] = []
-  
+
   for (const line of lines) {
     const parts = line.trim().split(/[\s,;]+/)
     if (parts.length < 7) continue
-    
+
     const order: OrderRequest = {
       clOrderId: parts[0] || '',
       market: parts[1] || 'XSHG',
       securityId: parts[2] || '',
-      side: (parts[3] === 'B' || parts[3] === 'S') ? parts[3] as 'B' | 'S' : 'B',
-      qty: parseInt(parts[4]) || 0,
+      side: (parts[3] === 'B' || parts[3] === 'S') ? (parts[3] as 'B' | 'S') : 'B',
+      qty: parseInt(parts[4], 10) || 0,
       price: parseFloat(parts[5]) || 0,
       shareHolderId: parts[6] || '',
       accountId: parts[7] || 'ACC001'
     }
-    
+
     if (order.clOrderId && order.securityId && order.qty > 0) {
       orders.push(order)
     }
   }
-  
+
   return orders
 }
 
@@ -367,6 +360,13 @@ const executeMatch = async () => {
 const clearData = async () => {
   await orderApi.clear()
 }
+
+defineExpose({
+  triggerFileInput,
+  submitManualOrder,
+  executeMatch,
+  clearData
+})
 
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp)
@@ -399,50 +399,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.toolbar {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.btn {
-  padding: 0.5rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: opacity 0.3s;
-}
-
-.btn:hover {
-  opacity: 0.8;
-}
-
-.btn-primary {
-  background: #1890ff;
-  color: white;
-}
-
-.btn-success {
-  background: #52c41a;
-  color: white;
-}
-
-.btn-danger {
-  background: #ff4d4f;
-  color: white;
-}
-
-.tip {
-  color: #666;
-  font-size: 0.85rem;
-  margin-left: auto;
 }
 
 .manual-form {
@@ -538,3 +494,5 @@ onUnmounted(() => {
   color: #52c41a;
 }
 </style>
+
+

@@ -1,14 +1,6 @@
-<template>
+﻿<template>
   <div class="auto-simulate">
     <div class="toolbar">
-      <button 
-        @click="toggleAutoSimulate" 
-        class="btn"
-        :class="autoSimulate ? 'btn-danger' : 'btn-success'"
-      >
-        {{ autoSimulate ? '停止模拟' : '开始模拟' }}
-      </button>
-      <button @click="clearData" class="btn btn-primary">清空数据</button>
       <div class="status">
         <span>状态: {{ autoSimulate ? '运行中' : '已停止' }}</span>
         <span>当前时间: {{ currentTime }}</span>
@@ -19,8 +11,8 @@
       <div class="sidebar">
         <h3>选择股票</h3>
         <div class="stock-list">
-          <div 
-            v-for="stock in stocks" 
+          <div
+            v-for="stock in stocks"
             :key="stock"
             class="stock-item"
             :class="{ active: selectedStock === stock }"
@@ -63,7 +55,7 @@
 
         <div class="tables-row">
           <div class="table-section">
-            <h3>撮合成功列表 (共 {{ tradeSuccesses.length }} 条)</h3>
+            <h3>撮合成功列表 (共{{ tradeSuccesses.length }} 条)</h3>
             <div class="table-wrapper">
               <table class="data-table">
                 <thead>
@@ -91,7 +83,7 @@
           </div>
 
           <div class="table-section">
-            <h3>撮合失败列表 (共 {{ tradeIllegals.length }} 条)</h3>
+            <h3>撮合失败列表 (共{{ tradeIllegals.length }} 条)</h3>
             <div class="table-wrapper">
               <table class="data-table">
                 <thead>
@@ -156,15 +148,15 @@ const maxPrice = computed(() => {
 
 const chartPoints = computed(() => {
   if (priceHistory.value.length < 2) return ''
-  
+
   const width = 800
   const height = 200
   const padding = 10
-  
+
   const min = minPrice.value
   const max = maxPrice.value
   const range = max - min || 1
-  
+
   return priceHistory.value.map((price, index) => {
     const x = (index / (priceHistory.value.length - 1)) * (width - padding * 2) + padding
     const y = height - ((price - min) / range) * (height - padding * 2) - padding
@@ -174,12 +166,12 @@ const chartPoints = computed(() => {
 
 const timeLabels = computed(() => {
   if (timeHistory.value.length < 2) return ['', '', '']
-  
+
   const getLabel = (timestamp: number) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString('zh-CN', { hour12: false })
   }
-  
+
   return [
     getLabel(timeHistory.value[0]),
     getLabel(timeHistory.value[Math.floor(timeHistory.value.length / 2)]),
@@ -193,7 +185,7 @@ const loadData = async () => {
     tradeSuccesses.value = res.data.tradeSuccesses || []
     tradeIllegals.value = res.data.tradeIllegals || []
     selectedStock.value = res.data.currentSecurityId || '600519'
-    
+
     tradeSuccesses.value.forEach(t => {
       if (!priceHistory.value.includes(t.execPrice)) {
         priceHistory.value.push(t.execPrice)
@@ -217,7 +209,7 @@ const connectWebSocket = () => {
         const data = JSON.parse(message.body)
         tradeSuccesses.value = data.tradeSuccesses || []
         tradeIllegals.value = data.tradeIllegals || []
-        
+
         tradeSuccesses.value.forEach(t => {
           if (!priceHistory.value.includes(t.execPrice)) {
             priceHistory.value.push(t.execPrice)
@@ -254,6 +246,12 @@ const clearData = async () => {
   tradeIllegals.value = []
 }
 
+defineExpose({
+  toggleAutoSimulate,
+  clearData,
+  changeStock
+})
+
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp)
   return date.toLocaleTimeString('zh-CN', { hour12: false })
@@ -285,45 +283,17 @@ onUnmounted(() => {
 }
 
 .toolbar {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
   background: white;
   padding: 1rem;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.btn {
-  padding: 0.5rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: opacity 0.3s;
-}
-
-.btn:hover {
-  opacity: 0.8;
-}
-
-.btn-success {
-  background: #52c41a;
-  color: white;
-}
-
-.btn-danger {
-  background: #ff4d4f;
-  color: white;
-}
-
-.btn-primary {
-  background: #1890ff;
-  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
 .status {
-  margin-left: auto;
   display: flex;
   gap: 2rem;
   color: #666;
@@ -332,6 +302,7 @@ onUnmounted(() => {
 .content {
   display: flex;
   gap: 1rem;
+  min-width: 0;
 }
 
 .sidebar {
@@ -373,6 +344,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 .price-chart {
@@ -429,16 +401,18 @@ onUnmounted(() => {
 }
 
 .tables-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  min-width: 0;
 }
 
 .table-section {
-  flex: 1;
   background: white;
   padding: 1rem;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 0;
 }
 
 .table-section h3 {
@@ -483,5 +457,11 @@ onUnmounted(() => {
 
 .data-table .sell {
   color: #52c41a;
+}
+
+@media (max-width: 1200px) {
+  .tables-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
