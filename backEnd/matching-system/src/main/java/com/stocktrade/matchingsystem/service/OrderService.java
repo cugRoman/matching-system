@@ -4,10 +4,14 @@ import com.stocktrade.matchingsystem.dto.OrderRequest;
 import com.stocktrade.matchingsystem.entity.Order;
 import com.stocktrade.matchingsystem.entity.TradeIllegal;
 import com.stocktrade.matchingsystem.entity.TradeSuccess;
+import com.stocktrade.matchingsystem.repository.OrderRepository;
+import com.stocktrade.matchingsystem.repository.TradeIllegalRepository;
+import com.stocktrade.matchingsystem.repository.TradeSuccessRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,9 +30,19 @@ public class OrderService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private TradeSuccessRepository tradeSuccessRepository;
+
+    @Autowired
+    private TradeIllegalRepository tradeIllegalRepository;
+
     private boolean autoSimulate = false;
     private int orderCounter = 0;
 
+    @Transactional
     public Order addOrder(OrderRequest request) {
         Order order = new Order(
             request.getClOrderId(),
@@ -46,10 +60,15 @@ public class OrderService {
         } else {
             sellRequests.put(order.getClOrderId(), order);
         }
+
+        // 同步写入在线数据库
+        orderRepository.save(order);
+
         broadcastUpdate();
         return order;
     }
 
+    @Transactional
     public void addOrders(List<OrderRequest> requests) {
         for (OrderRequest request : requests) {
             addOrder(request);
@@ -107,6 +126,7 @@ public class OrderService {
         return data;
     }
 
+    @Transactional
     public void executeMatching() {
         Set<String> allSecurities = new HashSet<>();
         allSecurities.addAll(buyRequests.values().stream()
@@ -129,16 +149,16 @@ public class OrderService {
         
         buyRequests.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(0); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 0); allOrders.add(o); });
         sellRequests.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(0); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 0); allOrders.add(o); });
         exchangeBuys.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(1); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 1); allOrders.add(o); });
         exchangeSells.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(1); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 1); allOrders.add(o); });
 
         Map<String, List<Order>> byHolder = allOrders.stream()
             .collect(Collectors.groupingBy(Order::getShareHolderId));
@@ -153,8 +173,13 @@ public class OrderService {
         }
 
         for (Order order : illegalOrders) {
-            order.setStatus(4);
-            tradeIllegals.add(new TradeIllegal(order, 1001));
+            order.setStatus((byte) 4);
+            TradeIllegal illegal = new TradeIllegal(order, 1001);
+            tradeIllegals.add(illegal);
+
+            // 同步到数据库：更新订单状态 + 写入非法记录
+            orderRepository.save(order);
+            tradeIllegalRepository.save(illegal);
             buyRequests.remove(order.getClOrderId());
             sellRequests.remove(order.getClOrderId());
             exchangeBuys.remove(order.getClOrderId());
@@ -162,7 +187,7 @@ public class OrderService {
         }
 
         List<Order> validOrders = allOrders.stream()
-            .filter(o -> o.getStatus() != 4)
+            .filter(o -> o.getStatus() != (byte) 4)
             .collect(Collectors.toList());
 
         PriorityQueue<Order> buyQueue = new PriorityQueue<>(
@@ -187,7 +212,8 @@ public class OrderService {
             Order buy = buyQueue.peek();
             Order sell = sellQueue.peek();
 
-            if (buy.getPrice() < sell.getPrice()) {
+            // BigDecimal 比较价格：buy.price < sell.price 则无法成交
+            if (buy.getPrice().compareTo(sell.getPrice()) < 0) {
                 break;
             }
 
@@ -195,7 +221,6 @@ public class OrderService {
             sell = sellQueue.poll();
 
             int tradeQty = Math.min(buy.getQty(), sell.getQty());
-            double execPrice = sell.getPrice();
 
             tradeSuccesses.add(new TradeSuccess(
                 securityId,
@@ -204,37 +229,50 @@ public class OrderService {
                 buy.getShareHolderId(),
                 sell.getShareHolderId(),
                 tradeQty,
-                execPrice
+                sell.getPrice().doubleValue()
             ));
 
             buy.setQty(buy.getQty() - tradeQty);
             sell.setQty(sell.getQty() - tradeQty);
 
             if (buy.getQty() > 0) {
-                buy.setStatus(2);
+                buy.setStatus((byte) 2);
                 buyQueue.add(buy);
+            } else {
+                buy.setStatus((byte) 3);
             }
             if (sell.getQty() > 0) {
-                sell.setStatus(2);
+                sell.setStatus((byte) 2);
                 sellQueue.add(sell);
+            } else {
+                sell.setStatus((byte) 3);
             }
+
+            // 更新撮合后订单状态到数据库
+            orderRepository.save(buy);
+            orderRepository.save(sell);
         }
 
         for (Order o : buyQueue) {
-            if (o.getStatus() == 0) o.setStatus(1);
+            if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeBuys.put(o.getClOrderId(), o);
             buyRequests.remove(o.getClOrderId());
+
+            orderRepository.save(o);
         }
         for (Order o : sellQueue) {
-            if (o.getStatus() == 0) o.setStatus(1);
+            if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeSells.put(o.getClOrderId(), o);
             sellRequests.remove(o.getClOrderId());
+
+            orderRepository.save(o);
         }
 
         buyRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
         sellRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
     }
 
+    @Transactional
     public void clearAll() {
         buyRequests.clear();
         sellRequests.clear();
@@ -243,6 +281,12 @@ public class OrderService {
         tradeSuccesses.clear();
         tradeIllegals.clear();
         orderCounter = 0;
+
+        // 清空数据库中的撮合数据
+        tradeSuccessRepository.deleteAll();
+        tradeIllegalRepository.deleteAll();
+        orderRepository.deleteAll();
+
         broadcastUpdate();
     }
 

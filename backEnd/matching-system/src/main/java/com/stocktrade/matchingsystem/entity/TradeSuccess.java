@@ -1,19 +1,40 @@
 package com.stocktrade.matchingsystem.entity;
 
-import java.util.UUID;
+import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicLong;
 
+@Entity
+@Table(name = "trade_successes")
 public class TradeSuccess {
     private static final AtomicLong idCounter = new AtomicLong(0);
     
+    @Id
+    @Column(name = "exec_id", length = 64, nullable = false)
     private String execId;
+
+    @Column(name = "security_id", length = 16, nullable = false)
     private String securityId;
+
+    @Column(name = "buy_order_id", length = 64, nullable = false)
     private String buyOrderId;
+
+    @Column(name = "sell_order_id", length = 64, nullable = false)
     private String sellOrderId;
+
+    @Column(name = "buy_share_holder_id", length = 32, nullable = false)
     private String buyShareHolderId;
+
+    @Column(name = "sell_share_holder_id", length = 32, nullable = false)
     private String sellShareHolderId;
+
+    @Column(name = "exec_qty", nullable = false)
     private Integer execQty;
-    private Double execPrice;
+
+    @Column(name = "exec_price", nullable = false)
+    private BigDecimal execPrice;
+
+    @Column(name = "exec_time", nullable = false)
     private Long execTime;
 
     public TradeSuccess() {}
@@ -28,7 +49,7 @@ public class TradeSuccess {
         this.buyShareHolderId = buyShareHolderId;
         this.sellShareHolderId = sellShareHolderId;
         this.execQty = execQty;
-        this.execPrice = execPrice;
+        this.execPrice = BigDecimal.valueOf(execPrice);
         this.execTime = System.currentTimeMillis();
     }
 
@@ -46,8 +67,8 @@ public class TradeSuccess {
     public void setSellShareHolderId(String sellShareHolderId) { this.sellShareHolderId = sellShareHolderId; }
     public Integer getExecQty() { return execQty; }
     public void setExecQty(Integer execQty) { this.execQty = execQty; }
-    public Double getExecPrice() { return execPrice; }
-    public void setExecPrice(Double execPrice) { this.execPrice = execPrice; }
+    public BigDecimal getExecPrice() { return execPrice; }
+    public void setExecPrice(BigDecimal execPrice) { this.execPrice = execPrice; }
     public Long getExecTime() { return execTime; }
     public void setExecTime(Long execTime) { this.execTime = execTime; }
 }

@@ -1,0 +1,13 @@
+com\stocktrade\matchingsystem\service\SimulateService.class
+com\stocktrade\matchingsystem\entity\Order.class
+com\stocktrade\matchingsystem\entity\TradeSuccess.class
+com\stocktrade\matchingsystem\entity\TradeIllegal.class
+com\stocktrade\matchingsystem\repository\TradeIllegalRepository.class
+com\stocktrade\matchingsystem\repository\TradeSuccessRepository.class
+com\stocktrade\matchingsystem\dto\OrderRequest.class
+com\stocktrade\matchingsystem\service\OrderService.class
+com\stocktrade\matchingsystem\config\WebSocketConfig.class
+com\stocktrade\matchingsystem\MatchingSystemApplication.class
+com\stocktrade\matchingsystem\repository\OrderRepository.class
+com\stocktrade\matchingsystem\controller\OrderController.class
+com\stocktrade\matchingsystem\controller\SimulateController.class

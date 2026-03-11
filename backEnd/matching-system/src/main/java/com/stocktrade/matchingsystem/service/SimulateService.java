@@ -4,10 +4,14 @@ import com.stocktrade.matchingsystem.dto.OrderRequest;
 import com.stocktrade.matchingsystem.entity.Order;
 import com.stocktrade.matchingsystem.entity.TradeIllegal;
 import com.stocktrade.matchingsystem.entity.TradeSuccess;
+import com.stocktrade.matchingsystem.repository.OrderRepository;
+import com.stocktrade.matchingsystem.repository.TradeIllegalRepository;
+import com.stocktrade.matchingsystem.repository.TradeSuccessRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,12 +30,22 @@ public class SimulateService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private TradeSuccessRepository tradeSuccessRepository;
+
+    @Autowired
+    private TradeIllegalRepository tradeIllegalRepository;
+
     private boolean autoSimulate = false;
     private int orderCounter = 0;
     private String currentSecurityId = "600519";
     private double meanPrice = 100.0;
     private final Random random = new Random();
 
+    @Transactional
     public Order addOrder(OrderRequest request) {
         Order order = new Order(
             request.getClOrderId(),
@@ -49,6 +63,10 @@ public class SimulateService {
         } else {
             sellRequests.put(order.getClOrderId(), order);
         }
+
+        // 同步写入在线数据库
+        orderRepository.save(order);
+
         broadcastUpdate();
         return order;
     }
@@ -106,6 +124,7 @@ public class SimulateService {
         return data;
     }
 
+    @Transactional
     public void executeMatching() {
         Set<String> allSecurities = new HashSet<>();
         allSecurities.addAll(buyRequests.values().stream()
@@ -128,16 +147,16 @@ public class SimulateService {
         
         buyRequests.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(0); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 0); allOrders.add(o); });
         sellRequests.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(0); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 0); allOrders.add(o); });
         exchangeBuys.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(1); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 1); allOrders.add(o); });
         exchangeSells.values().stream()
             .filter(o -> securityId.equals(o.getSecurityId()))
-            .forEach(o -> { o.setStatus(1); allOrders.add(o); });
+            .forEach(o -> { o.setStatus((byte) 1); allOrders.add(o); });
 
         Map<String, List<Order>> byHolder = allOrders.stream()
             .collect(Collectors.groupingBy(Order::getShareHolderId));
@@ -152,8 +171,12 @@ public class SimulateService {
         }
 
         for (Order order : illegalOrders) {
-            order.setStatus(4);
-            tradeIllegals.add(new TradeIllegal(order, 1001));
+            order.setStatus((byte) 4);
+            TradeIllegal illegal = new TradeIllegal(order, 1001);
+            tradeIllegals.add(illegal);
+
+            orderRepository.save(order);
+            tradeIllegalRepository.save(illegal);
             buyRequests.remove(order.getClOrderId());
             sellRequests.remove(order.getClOrderId());
             exchangeBuys.remove(order.getClOrderId());
@@ -161,7 +184,7 @@ public class SimulateService {
         }
 
         List<Order> validOrders = allOrders.stream()
-            .filter(o -> o.getStatus() != 4)
+            .filter(o -> o.getStatus() != (byte) 4)
             .collect(Collectors.toList());
 
         PriorityQueue<Order> buyQueue = new PriorityQueue<>(
@@ -186,7 +209,8 @@ public class SimulateService {
             Order buy = buyQueue.peek();
             Order sell = sellQueue.peek();
 
-            if (buy.getPrice() < sell.getPrice()) {
+            // BigDecimal 比较价格
+            if (buy.getPrice().compareTo(sell.getPrice()) < 0) {
                 break;
             }
 
@@ -196,10 +220,10 @@ public class SimulateService {
             int tradeQty = Math.min(buy.getQty(), sell.getQty());
             
             if (tradeQty > 0) {
-                double execPrice = sell.getPrice();
+                double execPrice = sell.getPrice().doubleValue();
                 meanPrice = execPrice;
 
-                tradeSuccesses.add(new TradeSuccess(
+                TradeSuccess success = new TradeSuccess(
                     securityId,
                     buy.getClOrderId(),
                     sell.getClOrderId(),
@@ -207,37 +231,51 @@ public class SimulateService {
                     sell.getShareHolderId(),
                     tradeQty,
                     execPrice
-                ));
+                );
+                tradeSuccesses.add(success);
+                tradeSuccessRepository.save(success);
             }
 
             buy.setQty(buy.getQty() - tradeQty);
             sell.setQty(sell.getQty() - tradeQty);
 
             if (buy.getQty() > 0) {
-                buy.setStatus(2);
+                buy.setStatus((byte) 2);
                 buyQueue.add(buy);
+            } else {
+                buy.setStatus((byte) 3);
             }
             if (sell.getQty() > 0) {
-                sell.setStatus(2);
+                sell.setStatus((byte) 2);
                 sellQueue.add(sell);
+            } else {
+                sell.setStatus((byte) 3);
             }
+
+            orderRepository.save(buy);
+            orderRepository.save(sell);
         }
 
         for (Order o : buyQueue) {
-            if (o.getStatus() == 0) o.setStatus(1);
+            if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeBuys.put(o.getClOrderId(), o);
             buyRequests.remove(o.getClOrderId());
+
+            orderRepository.save(o);
         }
         for (Order o : sellQueue) {
-            if (o.getStatus() == 0) o.setStatus(1);
+            if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeSells.put(o.getClOrderId(), o);
             sellRequests.remove(o.getClOrderId());
+
+            orderRepository.save(o);
         }
 
         buyRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
         sellRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
     }
 
+    @Transactional
     public void clearAll() {
         buyRequests.clear();
         sellRequests.clear();
@@ -247,6 +285,11 @@ public class SimulateService {
         tradeIllegals.clear();
         orderCounter = 0;
         meanPrice = 100.0;
+
+        tradeSuccessRepository.deleteAll();
+        tradeIllegalRepository.deleteAll();
+        orderRepository.deleteAll();
+
         broadcastUpdate();
     }
 
