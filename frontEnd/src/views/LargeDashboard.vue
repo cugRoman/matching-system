@@ -36,11 +36,10 @@
 import { computed, ref, type Component } from 'vue'
 import MatchingDemo from './MatchingDemo.vue'
 import AutoSimulate from './AutoSimulate.vue'
-import SubmitOrderPage from './large/SubmitOrderPage.vue'
 import RecentTradesPage from './large/RecentTradesPage.vue'
 import StatisticsPage from './large/StatisticsPage.vue'
 
-type PageKey = 'submit' | 'recent' | 'stats' | 'demo' | 'auto'
+type PageKey = 'recent' | 'stats' | 'demo' | 'auto'
 
 type TabItem = {
   key: string
@@ -48,7 +47,6 @@ type TabItem = {
 }
 
 const pages: Array<{ key: PageKey; label: string }> = [
-  { key: 'submit', label: '提交订单' },
   { key: 'recent', label: '最近成交' },
   { key: 'stats', label: '统计分析' },
   { key: 'demo', label: '撮合演示' },
@@ -56,11 +54,6 @@ const pages: Array<{ key: PageKey; label: string }> = [
 ]
 
 const featureTabs: Record<PageKey, TabItem[]> = {
-  submit: [
-    { key: 'form', label: '手动下单' },
-    { key: 'import', label: '批量导入' },
-    { key: 'queue', label: '挂单列表' }
-  ],
   recent: [
     { key: 'recent', label: '最近成交' },
     { key: 'illegal', label: '失败订单' }
@@ -82,16 +75,14 @@ const featureTabs: Record<PageKey, TabItem[]> = {
 }
 
 const componentMap: Record<PageKey, Component> = {
-  submit: SubmitOrderPage,
   recent: RecentTradesPage,
   stats: StatisticsPage,
   demo: MatchingDemo,
   auto: AutoSimulate
 }
 
-const activePage = ref<PageKey>('submit')
+const activePage = ref<PageKey>('recent')
 const activeFeatureByPage = ref<Record<PageKey, string>>({
-  submit: 'form',
   recent: 'recent',
   stats: 'overview',
   demo: 'import',
