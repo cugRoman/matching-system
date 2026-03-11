@@ -9,9 +9,51 @@
         accept=".txt,.json" 
         style="display: none"
       />
+      <button @click="submitManualOrder" class="btn btn-primary">手动添加订单</button>
       <button @click="executeMatch" class="btn btn-success">开始撮合</button>
       <button @click="clearData" class="btn btn-danger">清空数据</button>
       <span class="tip">提示: 点击导入请求选择txt文件，或使用内置示例</span>
+    </div>
+
+    <div class="manual-form">
+      <h3>手动输入订单</h3>
+      <div class="manual-grid">
+        <label>
+          订单号(可选)
+          <input v-model.trim="manualOrder.clOrderId" placeholder="留空自动生成" />
+        </label>
+        <label>
+          市场
+          <input v-model.trim="manualOrder.market" placeholder="XSHG" />
+        </label>
+        <label>
+          股票代码
+          <input v-model.trim="manualOrder.securityId" placeholder="600519" />
+        </label>
+        <label>
+          方向
+          <select v-model="manualOrder.side">
+            <option value="B">买入(B)</option>
+            <option value="S">卖出(S)</option>
+          </select>
+        </label>
+        <label>
+          数量
+          <input v-model.number="manualOrder.qty" type="number" min="1" step="1" />
+        </label>
+        <label>
+          价格
+          <input v-model.number="manualOrder.price" type="number" min="0.01" step="0.01" />
+        </label>
+        <label>
+          股东号
+          <input v-model.trim="manualOrder.shareHolderId" placeholder="SH001" />
+        </label>
+        <label>
+          账户号
+          <input v-model.trim="manualOrder.accountId" placeholder="ACC001" />
+        </label>
+      </div>
     </div>
 
     <div class="tables-container">
@@ -175,7 +217,17 @@ const tradeIllegals = ref<TradeIllegal[]>([])
 
 const fileInput = ref<HTMLInputElement | null>(null)
 let stompClient: Client | null = null
-let importBatch = 0
+
+const manualOrder = ref<OrderRequest>({
+  clOrderId: '',
+  market: 'XSHG',
+  securityId: '',
+  side: 'B',
+  qty: 100,
+  price: 10,
+  shareHolderId: '',
+  accountId: 'ACC001'
+})
 
 const loadData = async () => {
   try {
@@ -211,6 +263,49 @@ const connectWebSocket = () => {
 
 const triggerFileInput = () => {
   fileInput.value?.click()
+}
+
+const buildAutoOrderId = () => {
+  const now = Date.now().toString().slice(-8)
+  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+  return `MAN${now}${rand}`
+}
+
+const submitManualOrder = async () => {
+  const payload: OrderRequest = {
+    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
+    market: (manualOrder.value.market || 'XSHG').trim(),
+    securityId: (manualOrder.value.securityId || '').trim(),
+    side: manualOrder.value.side,
+    qty: Number(manualOrder.value.qty),
+    price: Number(manualOrder.value.price),
+    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
+    accountId: (manualOrder.value.accountId || 'ACC001').trim()
+  }
+
+  if (!payload.securityId || !payload.shareHolderId) {
+    alert('请至少填写股票代码和股东号')
+    return
+  }
+  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
+    alert('数量需为正整数，价格需大于0')
+    return
+  }
+
+  try {
+    await orderApi.addOrder(payload)
+    manualOrder.value = {
+      ...manualOrder.value,
+      clOrderId: '',
+      securityId: '',
+      qty: 100,
+      price: 10,
+      shareHolderId: ''
+    }
+  } catch (e) {
+    console.error('Failed to submit order:', e)
+    alert('手动添加订单失败')
+  }
 }
 
 const handleFileImport = async (event: Event) => {
@@ -265,37 +360,11 @@ const parseTxtFile = (content: string): OrderRequest[] => {
   return orders
 }
 
-const importRequests = async () => {
-  importBatch++
-  const orders = getDemoOrders(importBatch)
-  await orderApi.addOrders(orders)
-}
-
-const getDemoOrders = (batch: number) => {
-  if (batch === 1) {
-    return [
-      { clOrderId: 'B001', market: 'XSHG', securityId: '600519', side: 'B', qty: 100, price: 1800.00, shareHolderId: 'SH001', accountId: 'ACC001' },
-      { clOrderId: 'B002', market: 'XSHG', securityId: '600519', side: 'B', qty: 200, price: 1795.00, shareHolderId: 'SH002', accountId: 'ACC001' },
-      { clOrderId: 'B003', market: 'XSHG', securityId: '600519', side: 'B', qty: 150, price: 1800.00, shareHolderId: 'SH003', accountId: 'ACC001' },
-      { clOrderId: 'S001', market: 'XSHG', securityId: '600519', side: 'S', qty: 80, price: 1790.00, shareHolderId: 'SH004', accountId: 'ACC001' },
-      { clOrderId: 'S002', market: 'XSHG', securityId: '600519', side: 'S', qty: 100, price: 1800.00, shareHolderId: 'SH005', accountId: 'ACC001' },
-      { clOrderId: 'S003', market: 'XSHG', securityId: '600519', side: 'S', qty: 120, price: 1800.00, shareHolderId: 'SH006', accountId: 'ACC001' },
-    ]
-  } else {
-    return [
-      { clOrderId: 'B004', market: 'XSHG', securityId: '600519', side: 'B', qty: 50, price: 1810.00, shareHolderId: 'SH007', accountId: 'ACC001' },
-      { clOrderId: 'S004', market: 'XSHG', securityId: '600519', side: 'S', qty: 50, price: 1805.00, shareHolderId: 'SH007', accountId: 'ACC001' },
-      { clOrderId: 'B005', market: 'XSHG', securityId: '600519', side: 'B', qty: 100, price: 1800.00, shareHolderId: 'SH007', accountId: 'ACC001' },
-    ]
-  }
-}
-
 const executeMatch = async () => {
   await orderApi.match()
 }
 
 const clearData = async () => {
-  importBatch = 0
   await orderApi.clear()
 }
 
@@ -374,6 +443,47 @@ onUnmounted(() => {
   color: #666;
   font-size: 0.85rem;
   margin-left: auto;
+}
+
+.manual-form {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.manual-form h3 {
+  margin-bottom: 0.75rem;
+  color: #333;
+  font-size: 1rem;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.manual-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #555;
+}
+
+.manual-grid input,
+.manual-grid select {
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1200px) {
+  .manual-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
 }
 
 .tables-container {
