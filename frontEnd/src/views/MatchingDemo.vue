@@ -43,13 +43,9 @@
           <input v-model.trim="manualOrder.shareHolderId" placeholder="SH001" />
         </label>
         <label>
-          时间(可选)
-          <input v-model="orderTime" type="datetime-local" />
+          账户号
+          <input v-model.trim="manualOrder.accountId" placeholder="ACC001" />
         </label>
-      </div>
-      <div class="actions">
-        <button class="btn btn-primary" @click="submitToMemory">添加到内存</button>
-        <button class="btn btn-success" @click="saveToDatabase">保存到数据库</button>
       </div>
     </div>
 
@@ -222,10 +218,9 @@ const manualOrder = ref<OrderRequest>({
   side: 'B',
   qty: 100,
   price: 10,
-  shareHolderId: ''
+  shareHolderId: '',
+  accountId: 'ACC001'
 })
-
-const orderTime = ref('')
 
 const loadData = async () => {
   try {
@@ -270,11 +265,6 @@ const buildAutoOrderId = () => {
 }
 
 const submitManualOrder = async () => {
-  let timestamp: number | undefined
-  if (orderTime.value) {
-    timestamp = new Date(orderTime.value).getTime()
-  }
-
   const payload: OrderRequest = {
     clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
     market: (manualOrder.value.market || 'XSHG').trim(),
@@ -283,7 +273,7 @@ const submitManualOrder = async () => {
     qty: Number(manualOrder.value.qty),
     price: Number(manualOrder.value.price),
     shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    timestamp
+    accountId: (manualOrder.value.accountId || 'ACC001').trim()
   }
 
   if (!payload.securityId || !payload.shareHolderId) {
@@ -297,105 +287,18 @@ const submitManualOrder = async () => {
 
   try {
     await orderApi.addOrder(payload)
-    resetForm()
+    manualOrder.value = {
+      ...manualOrder.value,
+      clOrderId: '',
+      securityId: '',
+      qty: 100,
+      price: 10,
+      shareHolderId: ''
+    }
   } catch (e) {
     console.error('Failed to submit order:', e)
     alert('手动添加订单失败')
   }
-}
-
-const submitToMemory = async () => {
-  let timestamp: number | undefined
-  if (orderTime.value) {
-    timestamp = new Date(orderTime.value).getTime()
-  }
-
-  const payload: OrderRequest = {
-    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
-    market: (manualOrder.value.market || 'XSHG').trim(),
-    securityId: (manualOrder.value.securityId || '').trim(),
-    side: manualOrder.value.side,
-    qty: Number(manualOrder.value.qty),
-    price: Number(manualOrder.value.price),
-    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    timestamp
-  }
-
-  if (!payload.securityId || !payload.shareHolderId) {
-    alert('请至少填写股票代码和股东号')
-    return
-  }
-  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
-    alert('数量需为正整数，价格需大于0')
-    return
-  }
-
-  try {
-    await orderApi.addOrderToMemory(payload)
-    resetForm()
-  } catch (e) {
-    console.error('Failed to submit order:', e)
-    alert('添加到内存失败')
-  }
-}
-
-const saveToDatabase = async () => {
-  let timestamp: number | undefined
-  if (orderTime.value) {
-    timestamp = new Date(orderTime.value).getTime()
-  }
-
-  const payload: OrderRequest = {
-    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
-    market: (manualOrder.value.market || 'XSHG').trim(),
-    securityId: (manualOrder.value.securityId || '').trim(),
-    side: manualOrder.value.side,
-    qty: Number(manualOrder.value.qty),
-    price: Number(manualOrder.value.price),
-    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    timestamp
-  }
-
-  if (!payload.securityId || !payload.shareHolderId) {
-    alert('请至少填写股票代码和股东号')
-    return
-  }
-  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
-    alert('数量需为正整数，价格需大于0')
-    return
-  }
-
-  try {
-    await orderApi.addOrder(payload)
-    resetForm()
-  } catch (e) {
-    console.error('Failed to save order:', e)
-    alert('保存到数据库失败')
-  }
-}
-
-const saveMemoryToDb = async () => {
-  try {
-    const res = await orderApi.saveMemoryToDatabase()
-    await loadData()
-    const data = res.data
-    alert(`写入成功！订单: ${data.orders}, 成交: ${data.successes}, 失败: ${data.illegals}`)
-  } catch (e) {
-    console.error('Failed to save to database:', e)
-    alert('写入数据库失败')
-  }
-}
-
-const resetForm = () => {
-  manualOrder.value = {
-    ...manualOrder.value,
-    clOrderId: '',
-    securityId: '',
-    qty: 100,
-    price: 10,
-    shareHolderId: ''
-  }
-  orderTime.value = ''
 }
 
 const handleFileImport = async (event: Event) => {
@@ -428,10 +331,7 @@ const parseTxtFile = (content: string): OrderRequest[] => {
   const orders: OrderRequest[] = []
 
   for (const line of lines) {
-    const trimmedLine = line.trim()
-    if (!trimmedLine || trimmedLine.startsWith('#')) continue
-    
-    const parts = trimmedLine.split(/[\s,;]+/)
+    const parts = line.trim().split(/[\s,;]+/)
     if (parts.length < 7) continue
 
     const order: OrderRequest = {
@@ -442,7 +342,7 @@ const parseTxtFile = (content: string): OrderRequest[] => {
       qty: parseInt(parts[4], 10) || 0,
       price: parseFloat(parts[5]) || 0,
       shareHolderId: parts[6] || '',
-      timestamp: parts[7] ? parseInt(parts[7], 10) : undefined
+      accountId: parts[7] || 'ACC001'
     }
 
     if (order.clOrderId && order.securityId && order.qty > 0) {
@@ -461,43 +361,16 @@ const clearData = async () => {
   await orderApi.clear()
 }
 
-const clearMemory = async () => {
-  await orderApi.clearMemory()
-  await loadData()
-}
-
-const clearDatabase = async () => {
-  try {
-    await orderApi.clearDatabase()
-    await loadData()
-    alert('数据库已清空')
-  } catch (e) {
-    console.error('Failed to clear database:', e)
-    alert('清空数据库失败')
-  }
-}
-
 defineExpose({
   triggerFileInput,
   submitManualOrder,
-  submitToMemory,
-  saveToDatabase,
-  saveMemoryToDb,
-  clearMemory,
-  clearDatabase,
   executeMatch,
   clearData
 })
 
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  const second = String(date.getSeconds()).padStart(2, '0')
-  return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`
+  return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
 const getStatusText = (status: number) => {
@@ -620,23 +493,6 @@ onUnmounted(() => {
 .data-table .sell {
   color: #52c41a;
 }
-
-.actions {
-  display: flex;
-  gap: 0.6rem;
-  margin-top: 0.8rem;
-}
-
-.btn {
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  padding: 0.5rem 0.85rem;
-  cursor: pointer;
-}
-
-.btn-primary { background: #2563eb; }
-.btn-success { background: #16a34a; }
 </style>
 
 
