@@ -39,6 +39,14 @@ public class OrderController {
         return orderService.getAllData();
     }
 
+    /**
+     * 统计分析页面专用：从数据库汇总当前所有撮合相关数据。
+     */
+    @GetMapping("/orders/stats")
+    public Map<String, Object> getStats() {
+        return orderService.getStatsData();
+    }
+
     @GetMapping("/orders/buy-requests")
     public List<Map<String, Object>> getBuyRequests() {
         return orderService.getBuyRequests().stream().map(this::toMap).toList();
