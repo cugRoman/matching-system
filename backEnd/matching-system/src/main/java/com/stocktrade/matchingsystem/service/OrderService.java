@@ -44,7 +44,40 @@ public class OrderService {
 
     @Transactional
     public Order addOrder(OrderRequest request) {
-        Order order = new Order(
+        Order order = createOrderFromRequest(request);
+        
+        if ("B".equals(order.getSide())) {
+            buyRequests.put(order.getClOrderId(), order);
+        } else {
+            sellRequests.put(order.getClOrderId(), order);
+        }
+
+        orderRepository.save(order);
+
+        broadcastUpdate();
+        return order;
+    }
+
+    @Transactional
+    public Order addOrderToMemory(OrderRequest request) {
+        if (request.getQty() == null || request.getQty() <= 0) {
+            return null;
+        }
+        
+        Order order = createOrderFromRequest(request);
+        
+        if ("B".equals(order.getSide())) {
+            buyRequests.put(order.getClOrderId(), order);
+        } else {
+            sellRequests.put(order.getClOrderId(), order);
+        }
+
+        broadcastUpdate();
+        return order;
+    }
+
+    private Order createOrderFromRequest(OrderRequest request) {
+        return new Order(
             request.getClOrderId(),
             request.getMarket(),
             request.getSecurityId(),
@@ -52,20 +85,8 @@ public class OrderService {
             request.getQty(),
             request.getPrice(),
             request.getShareHolderId(),
-            request.getAccountId()
+            request.getTimestamp()
         );
-
-        if ("B".equals(order.getSide())) {
-            buyRequests.put(order.getClOrderId(), order);
-        } else {
-            sellRequests.put(order.getClOrderId(), order);
-        }
-
-        // 同步写入在线数据库
-        orderRepository.save(order);
-
-        broadcastUpdate();
-        return order;
     }
 
     @Transactional
@@ -75,16 +96,25 @@ public class OrderService {
         }
     }
 
+    @Transactional
+    public void addOrdersToMemory(List<OrderRequest> requests) {
+        for (OrderRequest request : requests) {
+            addOrderToMemory(request);
+        }
+    }
+
     public List<Order> getBuyRequests() {
         return buyRequests.values().stream()
-            .sorted(Comparator.comparing(Order::getPrice).reversed()
+            .sorted(Comparator.comparing(Order::getSecurityId)
+                .thenComparing(Order::getPrice).reversed()
                 .thenComparing(Order::getTimestamp))
             .collect(Collectors.toList());
     }
 
     public List<Order> getSellRequests() {
         return sellRequests.values().stream()
-            .sorted(Comparator.comparing(Order::getPrice)
+            .sorted(Comparator.comparing(Order::getSecurityId)
+                .thenComparing(Order::getPrice)
                 .thenComparing(Order::getTimestamp))
             .collect(Collectors.toList());
     }
@@ -173,6 +203,8 @@ public class OrderService {
         }
 
         for (Order order : illegalOrders) {
+            if (order.getQty() <= 0) continue;
+            
             order.setStatus((byte) 4);
             TradeIllegal illegal = new TradeIllegal(order, 1001);
             tradeIllegals.add(illegal);
@@ -254,6 +286,11 @@ public class OrderService {
         }
 
         for (Order o : buyQueue) {
+            if (o.getQty() <= 0) {
+                o.setStatus((byte) 3);
+                orderRepository.save(o);
+                continue;
+            }
             if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeBuys.put(o.getClOrderId(), o);
             buyRequests.remove(o.getClOrderId());
@@ -261,6 +298,11 @@ public class OrderService {
             orderRepository.save(o);
         }
         for (Order o : sellQueue) {
+            if (o.getQty() <= 0) {
+                o.setStatus((byte) 3);
+                orderRepository.save(o);
+                continue;
+            }
             if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeSells.put(o.getClOrderId(), o);
             sellRequests.remove(o.getClOrderId());
@@ -282,12 +324,31 @@ public class OrderService {
         tradeIllegals.clear();
         orderCounter = 0;
 
-        // 清空数据库中的撮合数据
         tradeSuccessRepository.deleteAll();
         tradeIllegalRepository.deleteAll();
         orderRepository.deleteAll();
 
         broadcastUpdate();
+    }
+
+    @Transactional
+    public void clearMemoryOnly() {
+        buyRequests.clear();
+        sellRequests.clear();
+        exchangeBuys.clear();
+        exchangeSells.clear();
+        tradeSuccesses.clear();
+        tradeIllegals.clear();
+        orderCounter = 0;
+
+        broadcastUpdate();
+    }
+
+    @Transactional
+    public void clearDatabaseOnly() {
+        tradeSuccessRepository.deleteAll();
+        tradeIllegalRepository.deleteAll();
+        orderRepository.deleteAll();
     }
 
     public int getOrderCount() {
@@ -332,9 +393,47 @@ public class OrderService {
         request.setQty(qty);
         request.setPrice(basePrice);
         request.setShareHolderId(holder);
-        request.setAccountId("ACC001");
         
         addOrder(request);
+    }
+
+    @Transactional
+    public Map<String, Object> saveMemoryToDatabase() {
+        int orderCount = 0;
+        int successCount = 0;
+        int illegalCount = 0;
+        
+        for (Order order : buyRequests.values()) {
+            orderRepository.save(order);
+            orderCount++;
+        }
+        for (Order order : sellRequests.values()) {
+            orderRepository.save(order);
+            orderCount++;
+        }
+        for (Order order : exchangeBuys.values()) {
+            orderRepository.save(order);
+            orderCount++;
+        }
+        for (Order order : exchangeSells.values()) {
+            orderRepository.save(order);
+            orderCount++;
+        }
+        
+        for (TradeSuccess trade : tradeSuccesses) {
+            tradeSuccessRepository.save(trade);
+            successCount++;
+        }
+        for (TradeIllegal trade : tradeIllegals) {
+            tradeIllegalRepository.save(trade);
+            illegalCount++;
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("orders", orderCount);
+        result.put("successes", successCount);
+        result.put("illegals", illegalCount);
+        return result;
     }
 
     private void broadcastUpdate() {

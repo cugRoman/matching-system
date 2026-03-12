@@ -8,7 +8,7 @@ public class OrderRequest {
     private Integer qty;
     private Double price;
     private String shareHolderId;
-    private String accountId;
+    private Long timestamp;
 
     public OrderRequest() {}
 
@@ -26,6 +26,6 @@ public class OrderRequest {
     public void setPrice(Double price) { this.price = price; }
     public String getShareHolderId() { return shareHolderId; }
     public void setShareHolderId(String shareHolderId) { this.shareHolderId = shareHolderId; }
-    public String getAccountId() { return accountId; }
-    public void setAccountId(String accountId) { this.accountId = accountId; }
+    public Long getTimestamp() { return timestamp; }
+    public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
 }

@@ -35,21 +35,23 @@
           <input v-model.trim="manualOrder.shareHolderId" placeholder="SH001" />
         </label>
         <label>
-          账户号
-          <input v-model.trim="manualOrder.accountId" placeholder="ACC001" />
+          时间(可选)
+          <input v-model="orderTime" type="datetime-local" />
         </label>
       </div>
       <div class="actions">
-        <button class="btn btn-primary" @click="submitManualOrder">提交订单</button>
-        <button class="btn btn-success" @click="executeMatch">立即撮合</button>
+        <button class="btn btn-primary" @click="submitToMemory">添加到内存</button>
+        <button class="btn btn-success" @click="saveToDatabase">保存到数据库</button>
+        <button class="btn btn-warning" @click="executeMatch">立即撮合</button>
       </div>
     </div>
 
     <div v-if="isImport" class="card import-card">
       <h3>批量导入</h3>
-      <p>支持 `.txt` / `.json`，会按现有撮合逻辑入库。</p>
+      <p>支持 `.txt` / `.json`，默认只添加到内存。</p>
       <div class="actions">
-        <button @click="triggerFileInput" class="btn btn-primary">选择并导入文件</button>
+        <button @click="triggerFileInput" class="btn btn-primary">导入到内存</button>
+        <button @click="triggerFileInputDb" class="btn btn-success">导入并保存数据库</button>
         <button class="btn btn-muted" @click="loadData">刷新状态</button>
       </div>
       <input
@@ -59,6 +61,13 @@
         accept=".txt,.json"
         @change="handleFileImport"
       />
+      <input
+        ref="fileInputDb"
+        type="file"
+        style="display: none"
+        accept=".txt,.json"
+        @change="handleFileImportDb"
+      />
     </div>
 
     <div v-if="isQueue" class="card">
@@ -66,7 +75,6 @@
         <h3>交易所挂单(最近20条)</h3>
         <div class="actions">
           <button class="btn btn-success" @click="executeMatch">开始撮合</button>
-          <button class="btn btn-danger" @click="clearData">清空数据</button>
           <button class="btn btn-muted" @click="loadData">刷新</button>
         </div>
       </div>
@@ -112,6 +120,7 @@ const props = withDefaults(defineProps<{ activeTab?: string }>(), {
 const exchangeBuys = ref<Order[]>([])
 const exchangeSells = ref<Order[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const fileInputDb = ref<HTMLInputElement | null>(null)
 
 const manualOrder = ref<OrderRequest>({
   clOrderId: '',
@@ -120,9 +129,10 @@ const manualOrder = ref<OrderRequest>({
   side: 'B',
   qty: 100,
   price: 10,
-  shareHolderId: '',
-  accountId: 'ACC001'
+  shareHolderId: ''
 })
+
+const orderTime = ref('')
 
 const isForm = computed(() => props.activeTab === 'form')
 const isImport = computed(() => props.activeTab === 'import')
@@ -144,6 +154,10 @@ const triggerFileInput = () => {
   fileInput.value?.click()
 }
 
+const triggerFileInputDb = () => {
+  fileInputDb.value?.click()
+}
+
 const buildAutoOrderId = () => {
   const now = Date.now().toString().slice(-8)
   const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
@@ -151,6 +165,11 @@ const buildAutoOrderId = () => {
 }
 
 const submitManualOrder = async () => {
+  let timestamp: number | undefined
+  if (orderTime.value) {
+    timestamp = new Date(orderTime.value).getTime()
+  }
+
   const payload: OrderRequest = {
     clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
     market: (manualOrder.value.market || 'XSHG').trim(),
@@ -159,7 +178,7 @@ const submitManualOrder = async () => {
     qty: Number(manualOrder.value.qty),
     price: Number(manualOrder.value.price),
     shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    accountId: (manualOrder.value.accountId || 'ACC001').trim()
+    timestamp
   }
 
   if (!payload.securityId || !payload.shareHolderId) {
@@ -173,6 +192,75 @@ const submitManualOrder = async () => {
   }
 
   await orderApi.addOrder(payload)
+  resetForm()
+  await loadData()
+}
+
+const submitToMemory = async () => {
+  let timestamp: number | undefined
+  if (orderTime.value) {
+    timestamp = new Date(orderTime.value).getTime()
+  }
+
+  const payload: OrderRequest = {
+    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
+    market: (manualOrder.value.market || 'XSHG').trim(),
+    securityId: (manualOrder.value.securityId || '').trim(),
+    side: manualOrder.value.side,
+    qty: Number(manualOrder.value.qty),
+    price: Number(manualOrder.value.price),
+    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
+    timestamp
+  }
+
+  if (!payload.securityId || !payload.shareHolderId) {
+    alert('请至少填写股票代码和股东号')
+    return
+  }
+
+  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
+    alert('数量需要为正整数，价格需要大于0')
+    return
+  }
+
+  await orderApi.addOrderToMemory(payload)
+  resetForm()
+  await loadData()
+}
+
+const saveToDatabase = async () => {
+  let timestamp: number | undefined
+  if (orderTime.value) {
+    timestamp = new Date(orderTime.value).getTime()
+  }
+
+  const payload: OrderRequest = {
+    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
+    market: (manualOrder.value.market || 'XSHG').trim(),
+    securityId: (manualOrder.value.securityId || '').trim(),
+    side: manualOrder.value.side,
+    qty: Number(manualOrder.value.qty),
+    price: Number(manualOrder.value.price),
+    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
+    timestamp
+  }
+
+  if (!payload.securityId || !payload.shareHolderId) {
+    alert('请至少填写股票代码和股东号')
+    return
+  }
+
+  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
+    alert('数量需要为正整数，价格需要大于0')
+    return
+  }
+
+  await orderApi.addOrder(payload)
+  resetForm()
+  await loadData()
+}
+
+const resetForm = () => {
   manualOrder.value = {
     ...manualOrder.value,
     clOrderId: '',
@@ -181,10 +269,22 @@ const submitManualOrder = async () => {
     price: 10,
     shareHolderId: ''
   }
-  await loadData()
+  orderTime.value = ''
 }
 
 const handleFileImport = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  const text = await file.text()
+  const orders = file.name.endsWith('.json') ? JSON.parse(text) : parseTxtFile(text)
+  await orderApi.addOrdersToMemory(orders)
+  target.value = ''
+  await loadData()
+}
+
+const handleFileImportDb = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
@@ -212,7 +312,7 @@ const parseTxtFile = (content: string): OrderRequest[] => {
       qty: parseInt(parts[4], 10) || 0,
       price: parseFloat(parts[5]) || 0,
       shareHolderId: parts[6] || '',
-      accountId: parts[7] || 'ACC001'
+      timestamp: parts[7] ? parseInt(parts[7], 10) : undefined
     }
 
     if (order.clOrderId && order.securityId && order.qty > 0) {
@@ -228,8 +328,8 @@ const executeMatch = async () => {
   await loadData()
 }
 
-const clearData = async () => {
-  await orderApi.clear()
+const saveMemoryToDb = async () => {
+  await orderApi.saveMemoryToDatabase()
   await loadData()
 }
 
@@ -303,7 +403,7 @@ onMounted(() => {
 
 .btn-primary { background: #2563eb; }
 .btn-success { background: #16a34a; }
-.btn-danger { background: #dc2626; }
+.btn-warning { background: #f59e0b; }
 .btn-muted { background: #475569; }
 
 .import-card p {

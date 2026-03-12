@@ -47,16 +47,7 @@ public class SimulateService {
 
     @Transactional
     public Order addOrder(OrderRequest request) {
-        Order order = new Order(
-            request.getClOrderId(),
-            request.getMarket(),
-            request.getSecurityId(),
-            request.getSide(),
-            request.getQty(),
-            request.getPrice(),
-            request.getShareHolderId(),
-            request.getAccountId()
-        );
+        Order order = createOrderFromRequest(request);
 
         if ("B".equals(order.getSide())) {
             buyRequests.put(order.getClOrderId(), order);
@@ -64,11 +55,41 @@ public class SimulateService {
             sellRequests.put(order.getClOrderId(), order);
         }
 
-        // 同步写入在线数据库
         orderRepository.save(order);
 
         broadcastUpdate();
         return order;
+    }
+
+    @Transactional
+    public Order addOrderToMemory(OrderRequest request) {
+        if (request.getQty() == null || request.getQty() <= 0) {
+            return null;
+        }
+        
+        Order order = createOrderFromRequest(request);
+
+        if ("B".equals(order.getSide())) {
+            buyRequests.put(order.getClOrderId(), order);
+        } else {
+            sellRequests.put(order.getClOrderId(), order);
+        }
+
+        broadcastUpdate();
+        return order;
+    }
+
+    private Order createOrderFromRequest(OrderRequest request) {
+        return new Order(
+            request.getClOrderId(),
+            request.getMarket(),
+            request.getSecurityId(),
+            request.getSide(),
+            request.getQty(),
+            request.getPrice(),
+            request.getShareHolderId(),
+            request.getTimestamp()
+        );
     }
 
     public List<Order> getBuyRequests() {
@@ -171,6 +192,8 @@ public class SimulateService {
         }
 
         for (Order order : illegalOrders) {
+            if (order.getQty() <= 0) continue;
+            
             order.setStatus((byte) 4);
             TradeIllegal illegal = new TradeIllegal(order, 1001);
             tradeIllegals.add(illegal);
@@ -257,6 +280,11 @@ public class SimulateService {
         }
 
         for (Order o : buyQueue) {
+            if (o.getQty() <= 0) {
+                o.setStatus((byte) 3);
+                orderRepository.save(o);
+                continue;
+            }
             if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeBuys.put(o.getClOrderId(), o);
             buyRequests.remove(o.getClOrderId());
@@ -264,6 +292,11 @@ public class SimulateService {
             orderRepository.save(o);
         }
         for (Order o : sellQueue) {
+            if (o.getQty() <= 0) {
+                o.setStatus((byte) 3);
+                orderRepository.save(o);
+                continue;
+            }
             if (o.getStatus() == (byte) 0) o.setStatus((byte) 1);
             exchangeSells.put(o.getClOrderId(), o);
             sellRequests.remove(o.getClOrderId());
@@ -322,10 +355,35 @@ public class SimulateService {
     public void autoSimulate() {
         if (!autoSimulate) return;
         
+        updateMeanPrice();
+        
         for (int i = 0; i < 10; i++) {
             generateOrder();
         }
         executeMatching();
+    }
+
+    @Scheduled(fixedRate = 60000)
+    public void saveAndClearTrades() {
+        if (!autoSimulate) return;
+        
+        if (!tradeSuccesses.isEmpty()) {
+            tradeSuccessRepository.saveAll(new ArrayList<>(tradeSuccesses));
+            tradeSuccesses.clear();
+        }
+        
+        if (!tradeIllegals.isEmpty()) {
+            tradeIllegalRepository.saveAll(new ArrayList<>(tradeIllegals));
+            tradeIllegals.clear();
+        }
+        
+        broadcastUpdate();
+    }
+
+    private synchronized void updateMeanPrice() {
+        double change = random.nextGaussian() * 0.1;
+        meanPrice = meanPrice + change;
+        meanPrice = Math.max(meanPrice, 1.0);
     }
 
     private synchronized void generateOrder() {
@@ -350,9 +408,8 @@ public class SimulateService {
         request.setQty(qty);
         request.setPrice(price);
         request.setShareHolderId(holder);
-        request.setAccountId("ACC" + holder);
         
-        addOrder(request);
+        addOrderToMemory(request);
     }
 
     private void broadcastUpdate() {

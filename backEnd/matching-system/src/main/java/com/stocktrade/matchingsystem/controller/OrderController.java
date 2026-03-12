@@ -22,6 +22,18 @@ public class OrderController {
         return Map.of("success", true, "message", "Order added successfully");
     }
 
+    @PostMapping("/orders/memory")
+    public Map<String, Object> addOrderToMemory(@RequestBody OrderRequest request) {
+        orderService.addOrderToMemory(request);
+        return Map.of("success", true, "message", "Order added to memory only");
+    }
+
+    @PostMapping("/orders/batch-memory")
+    public Map<String, Object> addOrdersToMemory(@RequestBody List<OrderRequest> requests) {
+        orderService.addOrdersToMemory(requests);
+        return Map.of("success", true, "message", "Orders added to memory only");
+    }
+
     @GetMapping("/orders/all")
     public Map<String, Object> getAllOrders() {
         return orderService.getAllData();
@@ -67,6 +79,25 @@ public class OrderController {
     public Map<String, Object> clearAll() {
         orderService.clearAll();
         return Map.of("success", true, "message", "All data cleared");
+    }
+
+    @PostMapping("/orders/clear-memory")
+    public Map<String, Object> clearMemoryOnly() {
+        orderService.clearMemoryOnly();
+        return Map.of("success", true, "message", "Memory cleared");
+    }
+
+    @PostMapping("/orders/clear-database")
+    public Map<String, Object> clearDatabaseOnly() {
+        orderService.clearDatabaseOnly();
+        return Map.of("success", true, "message", "Database cleared");
+    }
+
+    @PostMapping("/orders/save-memory")
+    public Map<String, Object> saveMemoryToDatabase() {
+        Map<String, Object> result = orderService.saveMemoryToDatabase();
+        result.put("success", true);
+        return result;
     }
 
     @GetMapping("/admin/health")

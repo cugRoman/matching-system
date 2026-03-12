@@ -47,7 +47,7 @@ type TabItem = {
 }
 
 const pages: Array<{ key: PageKey; label: string }> = [
-  { key: 'recent', label: '最近成交' },
+  { key: 'recent', label: '查找交易记录' },
   { key: 'stats', label: '统计分析' },
   { key: 'demo', label: '撮合演示' },
   { key: 'auto', label: '自动模拟' }
@@ -55,7 +55,7 @@ const pages: Array<{ key: PageKey; label: string }> = [
 
 const featureTabs: Record<PageKey, TabItem[]> = {
   recent: [
-    { key: 'recent', label: '最近成交' },
+    { key: 'recent', label: '成功交易' },
     { key: 'illegal', label: '失败订单' }
   ],
   stats: [
@@ -66,6 +66,8 @@ const featureTabs: Record<PageKey, TabItem[]> = {
     { key: 'import', label: '导入请求' },
     { key: 'manual', label: '手动添加订单' },
     { key: 'match', label: '开始撮合' },
+    { key: 'writeDb', label: '写入数据库' },
+    { key: 'clearDb', label: '清除数据库' },
     { key: 'clear', label: '清空数据' }
   ],
   auto: [
@@ -93,6 +95,9 @@ const activeViewRef = ref<{
   submitManualOrder?: () => Promise<void>
   executeMatch?: () => Promise<void>
   clearData?: () => Promise<void>
+  saveMemoryToDb?: () => Promise<void>
+  clearMemory?: () => Promise<void>
+  clearDatabase?: () => Promise<void>
   toggleAutoSimulate?: () => Promise<void>
 } | null>(null)
 
@@ -109,6 +114,8 @@ const setFeature = (feature: string) => {
     if (feature === 'import') activeViewRef.value?.triggerFileInput?.()
     if (feature === 'manual') void activeViewRef.value?.submitManualOrder?.()
     if (feature === 'match') void activeViewRef.value?.executeMatch?.()
+    if (feature === 'writeDb') void activeViewRef.value?.saveMemoryToDb?.()
+    if (feature === 'clearDb') void activeViewRef.value?.clearDatabase?.()
     if (feature === 'clear') void activeViewRef.value?.clearData?.()
   }
   if (activePage.value === 'auto') {

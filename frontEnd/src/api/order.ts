@@ -13,7 +13,7 @@ export interface OrderRequest {
   qty: number
   price: number
   shareHolderId: string
-  accountId: string
+  timestamp?: number
 }
 
 export interface Order {
@@ -69,9 +69,14 @@ export interface SimulateData extends AllData {
 export const orderApi = {
   getAll: () => api.get<AllData>('/orders/all'),
   addOrder: (order: OrderRequest) => api.post('/orders', order),
+  addOrderToMemory: (order: OrderRequest) => api.post('/orders/memory', order),
   addOrders: (orders: OrderRequest[]) => api.post('/orders/batch', orders),
+  addOrdersToMemory: (orders: OrderRequest[]) => api.post('/orders/batch-memory', orders),
   match: () => api.post('/orders/match'),
   clear: () => api.post('/orders/clear'),
+  clearMemory: () => api.post('/orders/clear-memory'),
+  clearDatabase: () => api.post('/orders/clear-database'),
+  saveMemoryToDatabase: () => api.post('/orders/save-memory'),
   setAutoSimulate: (enabled: boolean) => api.post('/orders/auto-simulate?enabled=' + enabled),
   getAutoSimulate: () => api.get<{ autoSimulate: boolean }>('/orders/auto-simulate')
 }
