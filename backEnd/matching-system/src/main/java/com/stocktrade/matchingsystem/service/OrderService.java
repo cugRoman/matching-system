@@ -126,6 +126,14 @@ public class OrderService {
         return data;
     }
 
+     public List<TradeSuccess> queryTradesByShareHolderId(String shareHolderId) {
+        if (shareHolderId == null || shareHolderId.trim().isEmpty()) {
+            return tradeSuccessRepository.findTop100ByOrderByExecTimeDesc();
+        }
+        return tradeSuccessRepository.findByBuyShareHolderIdOrSellShareHolderIdOrderByExecTimeDesc(
+                shareHolderId, shareHolderId);
+    }
+
     @Transactional
     public void executeMatching() {
         Set<String> allSecurities = new HashSet<>();
