@@ -272,12 +272,16 @@ public class OrderService {
                 buyQueue.add(buy);
             } else {
                 buy.setStatus((byte) 3);
+                // 从交易所列表中移除数量为0的订单
+                exchangeBuys.remove(buy.getClOrderId());
             }
             if (sell.getQty() > 0) {
                 sell.setStatus((byte) 2);
                 sellQueue.add(sell);
             } else {
                 sell.setStatus((byte) 3);
+                // 从交易所列表中移除数量为0的订单
+                exchangeSells.remove(sell.getClOrderId());
             }
 
             // 更新撮合后订单状态到数据库
@@ -288,6 +292,8 @@ public class OrderService {
         for (Order o : buyQueue) {
             if (o.getQty() <= 0) {
                 o.setStatus((byte) 3);
+                // 从交易所列表中移除数量为0的订单
+                exchangeBuys.remove(o.getClOrderId());
                 orderRepository.save(o);
                 continue;
             }
@@ -300,6 +306,8 @@ public class OrderService {
         for (Order o : sellQueue) {
             if (o.getQty() <= 0) {
                 o.setStatus((byte) 3);
+                // 从交易所列表中移除数量为0的订单
+                exchangeSells.remove(o.getClOrderId());
                 orderRepository.save(o);
                 continue;
             }
@@ -310,6 +318,51 @@ public class OrderService {
             orderRepository.save(o);
         }
 
+        // 检查该证券在交易所列表中的订单数量
+        long exchangeBuyCount = exchangeBuys.values().stream()
+            .filter(o -> securityId.equals(o.getSecurityId()))
+            .count();
+        long exchangeSellCount = exchangeSells.values().stream()
+            .filter(o -> securityId.equals(o.getSecurityId()))
+            .count();
+        
+        // 如果该证券在交易所列表中没有订单，则将该证券的所有订单设置为交易完成状态
+        if (exchangeBuyCount == 0 && exchangeSellCount == 0) {
+            // 从交易所列表中移除该证券的所有订单并设置为交易完成状态
+            List<Order> ordersToRemove = new ArrayList<>();
+            
+            // 处理 exchangeBuys 中的订单
+            for (Order order : exchangeBuys.values()) {
+                if (securityId.equals(order.getSecurityId())) {
+                    order.setStatus((byte) 3);
+                    orderRepository.save(order);
+                    ordersToRemove.add(order);
+                }
+            }
+            
+            // 从 exchangeBuys 中移除订单
+            for (Order order : ordersToRemove) {
+                exchangeBuys.remove(order.getClOrderId());
+            }
+            
+            ordersToRemove.clear();
+            
+            // 处理 exchangeSells 中的订单
+            for (Order order : exchangeSells.values()) {
+                if (securityId.equals(order.getSecurityId())) {
+                    order.setStatus((byte) 3);
+                    orderRepository.save(order);
+                    ordersToRemove.add(order);
+                }
+            }
+            
+            // 从 exchangeSells 中移除订单
+            for (Order order : ordersToRemove) {
+                exchangeSells.remove(order.getClOrderId());
+            }
+        }
+        
+        // 从普通订单列表中移除该证券的订单
         buyRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
         sellRequests.entrySet().removeIf(e -> securityId.equals(e.getValue().getSecurityId()));
     }
