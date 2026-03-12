@@ -77,7 +77,7 @@ export const orderApi = {
   getAutoSimulate: () =>
     api.get<{ autoSimulate: boolean }>("/orders/auto-simulate"),
   queryTrades: (shareHolderId?: string) =>
-    api.get<TradeSuccess[]>("/orders/trades", { params: { shareHolderId } }),
+    api.get<TradeSuccess[]>("/trades", { params: { shareHolderId } }),
 };
 
 export const simulateApi = {
