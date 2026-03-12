@@ -67,7 +67,10 @@ export interface SimulateData extends AllData {
 }
 
 export const orderApi = {
+  // 撮合演示列表（内存数据）
   getAll: () => api.get<AllData>('/orders/all'),
+  // 统计分析页面（数据库数据）
+  getStats: () => api.get<AllData>('/orders/stats'),
   addOrder: (order: OrderRequest) => api.post('/orders', order),
   addOrderToMemory: (order: OrderRequest) => api.post('/orders/memory', order),
   addOrders: (orders: OrderRequest[]) => api.post('/orders/batch', orders),

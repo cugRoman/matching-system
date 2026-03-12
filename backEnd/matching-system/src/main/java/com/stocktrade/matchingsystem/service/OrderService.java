@@ -145,6 +145,10 @@ public class OrderService {
             .collect(Collectors.toList());
     }
 
+    /**
+     * 撮合演示页面用的数据：完全基于内存当前状态。
+     * 列表展示、WebSocket 推送都走这里，不依赖在线数据库。
+     */
     public Map<String, Object> getAllData() {
         Map<String, Object> data = new HashMap<>();
         data.put("buyRequests", getBuyRequests());
@@ -153,6 +157,69 @@ public class OrderService {
         data.put("exchangeSells", getExchangeSells());
         data.put("tradeSuccesses", getTradeSuccesses());
         data.put("tradeIllegals", getTradeIllegals());
+        return data;
+    }
+
+    /**
+     * 统计分析用数据：从数据库中构建视图。
+     * 前端统计分析页面会单独调用这个接口。
+     */
+    public Map<String, Object> getStatsData() {
+        // 1. 从数据库加载所有订单
+        List<Order> allOrders = orderRepository.findAll();
+
+        // 2. 根据 side/status 划分不同视图（与前端期望结构保持一致）
+        List<Order> dbBuyRequests = allOrders.stream()
+            .filter(o -> o.getQty() > 0
+                && o.getStatus() == (byte) 0
+                && "B".equals(o.getSide()))
+            .sorted(Comparator.comparing(Order::getPrice).reversed()
+                .thenComparing(Order::getTimestamp))
+            .collect(Collectors.toList());
+
+        List<Order> dbSellRequests = allOrders.stream()
+            .filter(o -> o.getQty() > 0
+                && o.getStatus() == (byte) 0
+                && "S".equals(o.getSide()))
+            .sorted(Comparator.comparing(Order::getPrice)
+                .thenComparing(Order::getTimestamp))
+            .collect(Collectors.toList());
+
+        List<Order> dbExchangeBuys = allOrders.stream()
+            .filter(o -> o.getQty() > 0
+                && (o.getStatus() == (byte) 1 || o.getStatus() == (byte) 2)
+                && "B".equals(o.getSide()))
+            .sorted(Comparator.comparing(Order::getPrice).reversed()
+                .thenComparing(Order::getTimestamp))
+            .collect(Collectors.toList());
+
+        List<Order> dbExchangeSells = allOrders.stream()
+            .filter(o -> o.getQty() > 0
+                && (o.getStatus() == (byte) 1 || o.getStatus() == (byte) 2)
+                && "S".equals(o.getSide()))
+            .sorted(Comparator.comparing(Order::getPrice)
+                .thenComparing(Order::getTimestamp))
+            .collect(Collectors.toList());
+
+        // 3. 从数据库加载成交 / 非法记录（按时间排序）
+        List<TradeSuccess> dbTradeSuccesses = tradeSuccessRepository.findAll()
+            .stream()
+            .sorted(Comparator.comparing(TradeSuccess::getExecTime).reversed())
+            .collect(Collectors.toList());
+
+        List<TradeIllegal> dbTradeIllegals = tradeIllegalRepository.findAll()
+            .stream()
+            .sorted(Comparator.comparing(TradeIllegal::getRejectTime).reversed())
+            .collect(Collectors.toList());
+
+        // 4. 组装返回给前端的结构
+        Map<String, Object> data = new HashMap<>();
+        data.put("buyRequests", dbBuyRequests);
+        data.put("sellRequests", dbSellRequests);
+        data.put("exchangeBuys", dbExchangeBuys);
+        data.put("exchangeSells", dbExchangeSells);
+        data.put("tradeSuccesses", dbTradeSuccesses);
+        data.put("tradeIllegals", dbTradeIllegals);
         return data;
     }
 

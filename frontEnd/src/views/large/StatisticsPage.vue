@@ -308,7 +308,8 @@ const barHeight = (value: number) => {
 }
 
 const loadData = async () => {
-  const res = await orderApi.getAll()
+  // 统计分析页面走数据库汇总接口
+  const res = await orderApi.getStats()
   exchangeBuys.value = res.data.exchangeBuys || []
   exchangeSells.value = res.data.exchangeSells || []
   tradeSuccesses.value = res.data.tradeSuccesses || []
