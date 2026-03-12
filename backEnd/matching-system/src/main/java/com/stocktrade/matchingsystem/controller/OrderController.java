@@ -1,5 +1,5 @@
 package com.stocktrade.matchingsystem.controller;
-
+import com.stocktrade.matchingsystem.entity.TradeSuccess;
 import com.stocktrade.matchingsystem.dto.OrderRequest;
 import com.stocktrade.matchingsystem.service.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,6 +89,11 @@ public class OrderController {
     @GetMapping("/orders/auto-simulate")
     public Map<String, Object> getAutoSimulate() {
         return Map.of("autoSimulate", orderService.isAutoSimulate());
+    }
+
+     @GetMapping("/trades")
+    public List<TradeSuccess> getTrades(@RequestParam(required = false) String shareHolderId) {
+        return orderService.queryTradesByShareHolderId(shareHolderId);
     }
 
     private Map<String, Object> toMap(Object obj) {
