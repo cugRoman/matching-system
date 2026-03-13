@@ -488,9 +488,9 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: ;
-  width: 650px; /* 与下方标签同宽，便于精确对齐 */
-  padding-bottom:0 0;
+  width: 600px; /* 与下方标签同宽：2 * 300px */
+  margin: 0 auto;
+  transform: translateX(-8px); /* 只移动柱形，文字不动 */
 }
 
 .bar-item {
@@ -512,12 +512,10 @@ onMounted(() => {
 
 .bar-rect.volume {
   background: #60a5fa;
-  transform: translateX(-7px);
 }
 
 .bar-rect.amount {
   background: #38bdf8;
-  transform: translateX(-33px);
 }
 
 .bar-label {
@@ -536,6 +534,9 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   gap: 0;
+  width: 600px; /* 与柱形区域同宽，保证左右居中对齐 */
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .bar-x-item {
