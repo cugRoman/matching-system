@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="matching-demo">
     <input
       type="file"
@@ -46,10 +46,6 @@
           时间(可选)
           <input v-model="orderTime" type="datetime-local" />
         </label>
-      </div>
-      <div class="actions">
-        <button class="btn btn-primary" @click="submitToMemory">添加到内存</button>
-        <button class="btn btn-success" @click="saveToDatabase">保存到数据库</button>
       </div>
     </div>
 
@@ -304,75 +300,6 @@ const submitManualOrder = async () => {
   }
 }
 
-const submitToMemory = async () => {
-  let timestamp: number | undefined
-  if (orderTime.value) {
-    timestamp = new Date(orderTime.value).getTime()
-  }
-
-  const payload: OrderRequest = {
-    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
-    market: (manualOrder.value.market || 'XSHG').trim(),
-    securityId: (manualOrder.value.securityId || '').trim(),
-    side: manualOrder.value.side,
-    qty: Number(manualOrder.value.qty),
-    price: Number(manualOrder.value.price),
-    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    timestamp
-  }
-
-  if (!payload.securityId || !payload.shareHolderId) {
-    alert('请至少填写股票代码和股东号')
-    return
-  }
-  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
-    alert('数量需为正整数，价格需大于0')
-    return
-  }
-
-  try {
-    await orderApi.addOrderToMemory(payload)
-    resetForm()
-  } catch (e) {
-    console.error('Failed to submit order:', e)
-    alert('添加到内存失败')
-  }
-}
-
-const saveToDatabase = async () => {
-  let timestamp: number | undefined
-  if (orderTime.value) {
-    timestamp = new Date(orderTime.value).getTime()
-  }
-
-  const payload: OrderRequest = {
-    clOrderId: manualOrder.value.clOrderId || buildAutoOrderId(),
-    market: (manualOrder.value.market || 'XSHG').trim(),
-    securityId: (manualOrder.value.securityId || '').trim(),
-    side: manualOrder.value.side,
-    qty: Number(manualOrder.value.qty),
-    price: Number(manualOrder.value.price),
-    shareHolderId: (manualOrder.value.shareHolderId || '').trim(),
-    timestamp
-  }
-
-  if (!payload.securityId || !payload.shareHolderId) {
-    alert('请至少填写股票代码和股东号')
-    return
-  }
-  if (!Number.isInteger(payload.qty) || payload.qty <= 0 || payload.price <= 0) {
-    alert('数量需为正整数，价格需大于0')
-    return
-  }
-
-  try {
-    await orderApi.addOrder(payload)
-    resetForm()
-  } catch (e) {
-    console.error('Failed to save order:', e)
-    alert('保存到数据库失败')
-  }
-}
 
 const saveMemoryToDb = async () => {
   try {
@@ -480,8 +407,6 @@ const clearDatabase = async () => {
 defineExpose({
   triggerFileInput,
   submitManualOrder,
-  submitToMemory,
-  saveToDatabase,
   saveMemoryToDb,
   clearMemory,
   clearDatabase,
